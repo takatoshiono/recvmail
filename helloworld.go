@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/mail"
 
 	"google.golang.org/appengine"
 	gae_log "google.golang.org/appengine/log"
@@ -31,5 +33,17 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 		gae_log.Errorf(ctx, "Error reading body: %v", err)
 		return
 	}
-	gae_log.Infof(ctx, "Received mail: %v", b)
+	m, err := mail.ReadMessage(&b)
+	if err != nil {
+		gae_log.Errorf(ctx, "Error reading message: %v", err)
+		return
+	}
+	gae_log.Infof(ctx, "From: %s", m.Header.Get("From"))
+	gae_log.Infof(ctx, "Subject: %s", m.Header.Get("Subject"))
+	body, err := ioutil.ReadAll(m.Body)
+	if err != nil {
+		gae_log.Errorf(ctx, "Error reading message body: %v", err)
+	}
+	gae_log.Infof(ctx, "Body: %s", body)
+	// TODO: decode MIME multipart
 }
