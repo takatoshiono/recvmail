@@ -1,23 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
+
+	"google.golang.org/appengine"
+	gae_log "google.golang.org/appengine/log"
 )
 
 func main() {
 	http.HandleFunc("/", indexHandler)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-		log.Printf("Defaulting to port %s", port)
-	}
-
-	log.Printf("Listening on port %s", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+	http.HandleFunc("/_ah/mail/", incomingMail)
+	appengine.Main()
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -26,4 +21,15 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprint(w, "Hello, World!")
+}
+
+func incomingMail(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	defer r.Body.Close()
+	var b bytes.Buffer
+	if _, err := b.ReadFrom(r.Body); err != nil {
+		gae_log.Errorf(ctx, "Error reading body: %v", err)
+		return
+	}
+	gae_log.Infof(ctx, "Received mail: %v", b)
 }
