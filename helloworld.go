@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/mail"
+	"strings"
 
 	"google.golang.org/appengine"
 	gae_log "google.golang.org/appengine/log"
@@ -40,10 +44,39 @@ func incomingMail(w http.ResponseWriter, r *http.Request) {
 	}
 	gae_log.Infof(ctx, "From: %s", m.Header.Get("From"))
 	gae_log.Infof(ctx, "Subject: %s", m.Header.Get("Subject"))
-	body, err := ioutil.ReadAll(m.Body)
+
+	mediaType, params, err := mime.ParseMediaType(m.Header.Get("Content-Type"))
 	if err != nil {
-		gae_log.Errorf(ctx, "Error reading message body: %v", err)
+		gae_log.Errorf(ctx, "Error parsing media type: %v", err)
 	}
-	gae_log.Infof(ctx, "Body: %s", body)
-	// TODO: decode MIME multipart
+	if strings.HasPrefix(mediaType, "multipart/") {
+		// TODO: parse multipart recursively
+		mr := multipart.NewReader(m.Body, params["boundary"])
+		i := 1
+		for {
+			p, err := mr.NextPart()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				gae_log.Errorf(ctx, "Error getting next part: %v", err)
+			}
+			slurp, err := ioutil.ReadAll(p)
+			if err != nil {
+				gae_log.Errorf(ctx, "Error reading part: %v", err)
+			}
+			// TODO: decode message
+			gae_log.Infof(ctx, "Part%d %q", i, slurp)
+			for key := range p.Header {
+				gae_log.Infof(ctx, "%s: %s", key, p.Header.Get(key))
+			}
+			i++
+		}
+	} else {
+		body, err := ioutil.ReadAll(m.Body)
+		if err != nil {
+			gae_log.Errorf(ctx, "Error reading message body: %v", err)
+		}
+		gae_log.Infof(ctx, "Body: %s", body)
+	}
 }
